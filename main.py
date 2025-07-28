@@ -6,7 +6,6 @@ from sympy import symbols, Eq, expand, simplify
 x = symbols('x')
 
 def generate_problem():
-    a = 1
     r1 = random.randint(-9, 9)
     r2 = random.randint(-9, 9)
     while r1 == 0 or r2 == 0:
@@ -32,7 +31,8 @@ if st.button("答え合わせ"):
         if user_expr == correct_expr:
             st.success("正解！すごーい！🎉")
         else:
-            st.error(f"残念、不正解！ 正解は (x+{st.session_state.r1})(x+{st.session_state.r2})")
+            sorted_r = sorted([st.session_state.r1, st.session_state.r2])
+            st.error(f"残念、不正解！ 正解は (x{sorted_r[0]:+})(x{sorted_r[1]:+})")
     except Exception as e:
         st.error(f"エラー：入力の形式を見直してみてね（例：(x+1)(x-2)）")
 
