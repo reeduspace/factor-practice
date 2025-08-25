@@ -3,39 +3,41 @@ import re
 import streamlit as st
 
 # ---------- ユーティリティ ----------
-FACTOR_PATTERN = re.compile(
-    r"\(\s*x\s*([+\-]\s*\d+)\s*\)\s*\(\s*x\s*([+\-]\s*\d+)\s*\)$"
-)  # 例: (x+3)(x-2)
+# 置き換え：パーサを「定数項なし=0」を許容する形に
+FACTOR_PATTERN2 = re.compile(
+    r"^\(\s*x\s*(?:([+\-]\s*\d+))?\s*\)\s*\(\s*x\s*(?:([+\-]\s*\d+))?\s*\)\s*$"
+)
 
 def parse_factor_input(s: str):
-    """(x+a)(x+b) をパースして (a,b) を返す。空白/順序/符号のゆれを許容。"""
-    s = s.strip()
-    # (x+3)^2 の形式にも対応
-    s = s.replace("^2", ")(x+")  # (x+3)^2 -> (x+3)(x+
-    s = s.replace("))", ")")     # 余計な括弧を調整（雑だけど実用上OK）
+    """
+    (x+a)(x+b) をパースして (a,b) を返す。
+    a,b は整数。a/b を省略した場合は 0 とみなす。
+    例: (x)(x-8) -> (0,-8),  (x+3)^2 -> (3,3)
+    """
+    s = s.strip().replace("*", "")
+    # (x+3)^2 を (x+3)(x+3) として扱う
+    if "^2" in s:
+        s = re.sub(r"\(\s*x\s*([+\-]\s*\d+)\s*\)\s*\^\s*2",
+                   r"(x\1)(x\1)", s)
 
-    # 掛け算記号省略に対応（(x+3)*(x-2) もOK）
-    s = s.replace("*", "")
-
-    m = FACTOR_PATTERN.match(s)
+    m = FACTOR_PATTERN2.match(s)
     if not m:
         return None
-    a = int(m.group(1).replace(" ", ""))
-    b = int(m.group(2).replace(" ", ""))
+    def pick(g):
+        return int(g.replace(" ", "")) if g else 0
+    a = pick(m.group(1))
+    b = pick(m.group(2))
     return a, b
-
-def factors_from_b_c(b: int, c: int):
-    """x^2 + b x + c を (x+p)(x+q) としたときの (p,q) を返す（順不同）。"""
-    for p in range(-50, 51):
-        q = b - p
-        if p * q == c:
-            return tuple(sorted((p, q)))
-    return None
-
 def pretty_factor(p: int, q: int):
-    def term(t):
-        return f"+{t}" if t >= 0 else f"{t}"
-    return f"(x{term(p)})(x{term(q)})"
+    def one(t):
+        if t == 0:
+            return "(x)"
+        sign = "+" if t >= 0 else ""
+        return f"(x{sign}{t})"
+    # (x)(x) のときは (x)^2 と簡約表示
+    if p == 0 and q == 0:
+        return "(x)^2"
+    return f"{one(p)}{one(q)}"
 
 # ---------- 初期化 ----------
 st.set_page_config(page_title="因数分解トレーニング（モニック）", page_icon="🧠", layout="centered")
@@ -82,11 +84,22 @@ with colB:
 with colC:
     st.metric("Score", st.session_state.score)
     st.metric("Combo", st.session_state.combo)
+def poly_latex(b: int, c: int):
+    parts = [r"x^2"]
+    if b != 0:
+        parts.append(rf"{'+' if b>0 else '-'} {abs(b)}x")
+    if c != 0:
+        parts.append(rf"{'+' if c>0 else '-'} {abs(c)}")
+    return " ".join(parts) if len(parts) > 1 else r"x^2"
+
+# 出題表示のところを置き換え
+st.subheader("問題")
+st.latex(poly_latex(b, c))
 
 ensure_problem()
 b, c, p, q = st.session_state.problem
 st.subheader("問題")
-st.latex(rf"x^2 + {b}x + {c}")
+st.latex(poly_latex(b, c))
 
 answer = st.text_input("因数分解の形を入力してください", key="answer_input", placeholder="(x+3)(x-2)")
 submitted = st.button("✅ 判定する")
